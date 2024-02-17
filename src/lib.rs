@@ -525,9 +525,10 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
 #[track_caller]
 fn output_file(config: &Config) -> File {
     OpenOptions::new()
-        .append(true)
-        .create(true)
         .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
         .open(config.output)
         .unwrap_or_else(|_| panic!("Could not create or open {} file.", config.output))
 }
