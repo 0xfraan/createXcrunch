@@ -221,7 +221,7 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
     let file = output_file(&config);
 
     // track how many addresses have been found and information about them
-    let mut found: u64 = 0;
+    let found: u64 = 0;
     let mut found_list: Vec<String> = vec![];
 
     // set up a controller for terminal output
@@ -518,7 +518,7 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
         writeln!(&file, "{output}").expect("Couldn't write to `output.txt` file.");
 
         file.unlock().expect("Couldn't unlock file.");
-        found += 1;
+        break Ok(());
     }
 }
 
