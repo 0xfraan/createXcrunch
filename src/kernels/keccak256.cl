@@ -182,6 +182,7 @@ static inline void partial_keccakf(ulong *a)
 #undef o
 }
 
+#ifdef PATTERN()
 static inline bool isMatching(uchar const *d)
 {
   __constant char* pattern = PATTERN();
@@ -212,6 +213,7 @@ static inline bool isMatching(uchar const *d)
     }
     return true;
 }
+#endif
 
 #define hasTotal(d) ( \
   (!(d[0])) + (!(d[1])) + (!(d[2])) + (!(d[3])) + \

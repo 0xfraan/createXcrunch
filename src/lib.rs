@@ -1,18 +1,11 @@
 use alloy_primitives::{hex, Address, FixedBytes};
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use console::Term;
-use fs4::FileExt;
 use itertools::chain;
 use ocl::{Buffer, Context, Device, MemFlags, Platform, ProQue, Program, Queue};
 use rand::{thread_rng, Rng};
-use separator::Separatable;
 use std::{
     fmt::Write as _,
-    fs::{File, OpenOptions},
-    io::prelude::*,
     time::{SystemTime, UNIX_EPOCH},
 };
-use terminal_size::{terminal_size, Height};
 
 pub mod cli;
 
@@ -23,8 +16,6 @@ const PROXY_CHILD_CODEHASH: [u8; 32] = [
 
 // workset size (tweak this!)
 const WORK_SIZE: u32 = 0x4000000; // max. 0x15400000 to abs. max 0xffffffff
-
-const WORK_FACTOR: u128 = (WORK_SIZE as u128) / 1_000_000;
 
 static KERNEL_SRC: &str = include_str!("./kernels/keccak256.cl");
 
@@ -239,19 +230,6 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
     // create a random number generator
     let mut rng = thread_rng();
 
-    // determine the start time
-    let start_time: f64 = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64();
-
-    // set up variables for tracking performance
-    let mut rate: f64 = 0.0;
-    let mut cumulative_nonce: u64 = 0;
-
-    // the previous timestamp of printing to the terminal
-    let mut previous_time: f64 = 0.0;
-
     // the last work duration in milliseconds
     let mut work_duration_millis: u64 = 0;
 
@@ -271,7 +249,6 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
         // reset nonce & create a buffer to view it in little-endian
         // for more uniformly distributed nonces, we shall initialize it to a random value
         let mut nonce: [u32; 1] = rng.gen();
-        let mut view_buf = [0; 8];
 
         // build a corresponding buffer for passing the nonce to the kernel
         let mut nonce_buffer = Buffer::builder()
@@ -310,9 +287,6 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
 
             // calculate the current time
             let mut now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-            // increment the cumulative nonce (does not reset after a match)
-            cumulative_nonce += 1;
 
             // record the start time of the work
             let work_start_time_millis = now.as_secs() * 1000 + now.subsec_nanos() as u64 / 1000000;
@@ -376,20 +350,11 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
             .chain(solutions[3].to_be_bytes()[..4].to_vec())
             .collect::<Vec<u8>>();
 
-        // count total and leading zero bytes
-        let mut total = 0;
-        let mut leading = 0;
-        for (i, &b) in address.iter().enumerate() {
-            if b == 0 {
-                total += 1;
-            } else if leading == 0 {
-                // set leading on finding non-zero byte
-                leading = i;
-            }
-        }
+        let output = format!("0x{},0x{}", hex::encode(salt), hex::encode(address),);
 
-        let output = format!("0x{} => 0x{}", hex::encode(salt), hex::encode(address),);
         println!("{}", output);
+        
+        break Ok(());
     }
 }
 
