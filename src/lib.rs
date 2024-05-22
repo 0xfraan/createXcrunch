@@ -212,21 +212,6 @@ impl<'a> Config<'a> {
 /// Adapted from https://github.com/0age/create2crunch
 ///
 pub fn gpu(config: Config) -> ocl::Result<()> {
-    println!(
-        "Setting up OpenCL miner using device {}...",
-        config.gpu_device
-    );
-
-    // (create if necessary) and open a file where found salts will be written
-    let file = output_file(&config);
-
-    // track how many addresses have been found and information about them
-    let found: u64 = 0;
-    let mut found_list: Vec<String> = vec![];
-
-    // set up a controller for terminal output
-    let term = Term::stdout();
-
     // set up a platform to use
     let platform = Platform::new(ocl::core::default_platform()?);
 
@@ -325,104 +310,6 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
 
             // calculate the current time
             let mut now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-            let current_time = now.as_secs() as f64;
-
-            // we don't want to print too fast
-            let print_output = current_time - previous_time > 0.99;
-            previous_time = current_time;
-
-            // clear the terminal screen
-            if print_output {
-                term.clear_screen()?;
-
-                // get the total runtime and parse into hours : minutes : seconds
-                let total_runtime = current_time - start_time;
-                let total_runtime_hrs = total_runtime as u64 / 3600;
-                let total_runtime_mins = (total_runtime as u64 - total_runtime_hrs * 3600) / 60;
-                let total_runtime_secs = total_runtime
-                    - (total_runtime_hrs * 3600) as f64
-                    - (total_runtime_mins * 60) as f64;
-
-                // determine the number of attempts being made per second
-                let work_rate: u128 = WORK_FACTOR * cumulative_nonce as u128;
-                if total_runtime > 0.0 {
-                    rate = 1.0 / total_runtime;
-                }
-
-                // fill the buffer for viewing the properly-formatted nonce
-                LittleEndian::write_u64(&mut view_buf, (nonce[0] as u64) << 32);
-
-                // calculate the terminal height, defaulting to a height of ten rows
-                let height = terminal_size().map(|(_w, Height(h))| h).unwrap_or(10);
-
-                // display information about the total runtime and work size
-                term.write_line(&format!(
-                    "total runtime: {}:{:02}:{:02} ({} cycles)\t\t\t\
-                     work size per cycle: {}",
-                    total_runtime_hrs,
-                    total_runtime_mins,
-                    total_runtime_secs,
-                    cumulative_nonce,
-                    WORK_SIZE.separated_string(),
-                ))?;
-
-                // display information about the attempt rate and found solutions
-                term.write_line(&format!(
-                    "rate: {:.2} million attempts per second\t\t\t\
-                     total found this run: {}",
-                    work_rate as f64 * rate,
-                    found
-                ))?;
-
-                let threshold_string = match config.reward {
-                    RewardVariant::LeadingZeros { zeros_threshold } => {
-                        format!("with {} leading zero byte(s)", zeros_threshold)
-                    }
-                    RewardVariant::TotalZeros { zeros_threshold } => {
-                        format!("with {} total zero byte(s)", zeros_threshold)
-                    }
-                    RewardVariant::LeadingAndTotalZeros {
-                        leading_zeros_threshold,
-                        total_zeros_threshold,
-                    } => format!(
-                        "with {} leading and {} total zero byte(s)",
-                        leading_zeros_threshold, total_zeros_threshold
-                    ),
-                    RewardVariant::LeadingOrTotalZeros {
-                        leading_zeros_threshold,
-                        total_zeros_threshold,
-                    } => format!(
-                        "with {} leading or {} total zero byte(s)",
-                        leading_zeros_threshold, total_zeros_threshold
-                    ),
-                    RewardVariant::Matching { ref pattern } => {
-                        format!("matching pattern 0x{}", pattern)
-                    }
-                };
-
-                let variant = match config.create_variant {
-                    CreateXVariant::Create2 { init_code_hash: _ } => "Create2",
-                    CreateXVariant::Create3 {} => "Create3",
-                };
-
-                // display information about the current search criteria
-                term.write_line(&format!(
-                    "current search space: {}xxxxxxxx{:06x}\t\t\
-                     threshold: mining for {} address {}",
-                    hex::encode(salt),
-                    // Only the first 3 bytes are used
-                    BigEndian::read_u64(&view_buf) >> 8,
-                    variant,
-                    threshold_string
-                ))?;
-
-                // display recently found solutions based on terminal height
-                let rows = if height < 5 { 1 } else { height as usize - 4 };
-                let last_rows: Vec<String> = found_list.iter().cloned().rev().take(rows).collect();
-                let ordered: Vec<String> = last_rows.iter().cloned().rev().collect();
-                let recently_found = &ordered.join("\n");
-                term.write_line(recently_found)?;
-            }
 
             // increment the cumulative nonce (does not reset after a match)
             cumulative_nonce += 1;
@@ -502,35 +389,8 @@ pub fn gpu(config: Config) -> ocl::Result<()> {
         }
 
         let output = format!("0x{} => 0x{}", hex::encode(salt), hex::encode(address),);
-
-        let show = format!("{output} ({leading} / {total})");
-        match config.reward {
-            RewardVariant::Matching { pattern: _ } => {
-                found_list.push(output.to_string());
-            }
-            _ => {
-                found_list.push(show);
-            }
-        }
-
-        file.lock_exclusive().expect("Couldn't lock file.");
-
-        writeln!(&file, "{output}").expect("Couldn't write to `output.txt` file.");
-
-        file.unlock().expect("Couldn't unlock file.");
-        break Ok(());
+        println!("{}", output);
     }
-}
-
-#[track_caller]
-fn output_file(config: &Config) -> File {
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(config.output)
-        .unwrap_or_else(|_| panic!("Could not create or open {} file.", config.output))
 }
 
 /// Creates the OpenCL kernel source code by populating the template with the
